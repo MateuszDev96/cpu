@@ -1,0 +1,31 @@
+`timescale 1ns/1ps
+module tb;
+    reg clk = 0;
+    reg rst = 1;
+    wire [7:0] pc;
+    wire io_write;
+    wire [31:0] io_data;
+
+    cpu uut (
+        .clk(clk),
+        .rst(rst),
+        .dbg_pc(pc),
+        .io_write(io_write),
+        .io_data(io_data)
+    );
+
+    always #5 clk = ~clk;
+
+    initial begin
+        #12 rst = 0;
+        #2000 $finish;
+    end
+
+    reg prev = 0;
+    always @(posedge clk) begin
+        if (!prev && io_write) begin
+            $display("%0d", io_data);
+        end
+        prev <= io_write;
+    end
+endmodule
