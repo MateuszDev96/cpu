@@ -79,7 +79,6 @@ module cpu (
     end
 endmodule
 
-// Twój rom64 jest OK, więc nie zmieniam
 module rom64 #(parameter WIDTH=64, DEPTH=256, INIT_FILE="") (
     input wire clk,
     input wire [7:0] addr,
