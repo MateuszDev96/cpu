@@ -1,27 +1,8 @@
 #!/usr/bin/env python3
 """
-assemble.py - dwuprzebiegowy assembler dla 32-bitowego micro-RISC
-
-Instrukcje (skrót):
-  NOP
-  ADD rd, rs
-  SUB rd, rs
-  LI  rd, imm16
-  LD  rd, addr8
-  ST  rd, addr8
-  JZ  rd, disp8   (disp8 w imm16[7:0], sign-extended)
-  JMP addr_or_label  (adres w imm16[7:0])
-
-Dyrektywy:
-  .string "..."    - rozpisuje na LI r0,chr ; ST r0,0xFF
-  .asciz "..."     - jak .string + dodaje 0 byte
-  .halt            - JMP do własnego adresu (halt)
-  ; lub # komentarz
-
-Opcje:
-  --out FILE  (domyślnie rom_init.hex)
-  --pad N     (dopaduj plik do N słów, opcjonalnie)
+assemble64.py - dwuprzebiegowy assembler dla 64-bitowego micro-RISC
 """
+
 import sys, re, argparse
 
 def regnum(r):
@@ -33,10 +14,10 @@ def regnum(r):
 def parse_imm(s):
     s = s.strip()
     if s.startswith("0x") or s.startswith("0X"):
-        return int(s,16)
+        return int(s, 16)
     if s.endswith("b"):
-        return int(s[:-1],2)
-    return int(s,10)
+        return int(s[:-1], 2)
+    return int(s, 10)
 
 def unescape_string(s):
     return bytes(s, "utf8").decode("unicode_escape")
@@ -51,11 +32,6 @@ def read_source(fname):
     return raw
 
 def first_pass(lines):
-    """
-    Rozwijamy etykiety i dyrektywy tak, aby wiedzieć ile słów zajmie każdy wpis.
-    Zwracamy listę (kind, payload) i mapę label->addr (pc).
-    kind: INST (payload=instr text), BYTE (payload=single char), HALT (None)
-    """
     labels = {}
     expanded = []
     pc = 0
@@ -63,14 +39,12 @@ def first_pass(lines):
         s = code.strip()
         if not s:
             continue
-        # label
         if re.match(r'^[A-Za-z_]\w*:$', s):
             lab = s[:-1]
             if lab in labels:
                 raise ValueError(f"Duplicate label {lab}")
             labels[lab] = pc
             continue
-        # directives .string / .asciz
         m = re.match(r'^\.(string|asciz)\s+"(.*)"\s*$', s)
         if m:
             kind = m.group(1)
@@ -78,7 +52,7 @@ def first_pass(lines):
             txt = unescape_string(raw)
             for ch in txt:
                 expanded.append(("BYTE", ch))
-                pc += 2   # LI + ST -> 2 słowa
+                pc += 2
             if kind == "asciz":
                 expanded.append(("BYTE", "\x00"))
                 pc += 2
@@ -87,22 +61,21 @@ def first_pass(lines):
             expanded.append(("HALT", None))
             pc += 1
             continue
-        # normal instruction
         expanded.append(("INST", s))
         pc += 1
     return expanded, labels
 
 def emit_inst_word(opcode, rd=0, rs=0, imm16=0):
     """
-    Encode 32-bit instruction word:
-    [31:28] opcode
-    [27:25] rd
-    [24:22] rs
-    [21:16] reserved (0)
-    [15:0] imm16
+    Encode 64-bit instruction word:
+    [63:60] opcode
+    [59:57] rd
+    [56:54] rs
+    [53:48] reserved
+    [47:0]  imm16 (zero-extended)
     """
-    w = ((opcode & 0xF) << 28) | ((rd & 0x7) << 25) | ((rs & 0x7) << 22) | (imm16 & 0xFFFF)
-    return w & 0xFFFFFFFF
+    word = ((opcode & 0xF) << 60) | ((rd & 0x7) << 57) | ((rs & 0x7) << 54) | (imm16 & 0xFFFF)
+    return word & 0xFFFFFFFFFFFFFFFF
 
 def second_pass(expanded, labels):
     outwords = []
@@ -110,48 +83,51 @@ def second_pass(expanded, labels):
     for kind, payload in expanded:
         if kind == "BYTE":
             val = ord(payload)
-            # LI r0, imm16
-            outwords.append(emit_inst_word(0x3, rd=0, rs=0, imm16=val & 0xFFFF))
-            # ST r0, 0xFF (I/O)
-            outwords.append(emit_inst_word(0x5, rd=0, rs=0, imm16=0x00FF))
+            outwords.append(emit_inst_word(0x3, rd=0, rs=0, imm16=val))       # LI r0, ch
+            outwords.append(emit_inst_word(0x5, rd=0, rs=0, imm16=0x00FF))    # ST r0, 0xFF
             pc += 2
             continue
         if kind == "HALT":
             addr = pc & 0xFF
-            outwords.append(emit_inst_word(0x7, rd=0, rs=0, imm16=addr & 0xFFFF))
+            outwords.append(emit_inst_word(0x7, 0, 0, addr))
             pc += 1
             continue
-        # INST
         s = payload.strip()
         parts = re.split(r'[,\s]+', s)
         op = parts[0].upper()
         if op == "NOP":
-            instr_word = emit_inst_word(0x0, 0, 0, 0)
+            instr_word = emit_inst_word(0x0)
         elif op == "ADD":
-            rd = regnum(parts[1]); rs = regnum(parts[2])
-            instr_word = emit_inst_word(0x1, rd, rs, 0)
+            rd = regnum(parts[1])
+            rs = regnum(parts[2])
+            instr_word = emit_inst_word(0x1, rd, rs)
         elif op == "SUB":
-            rd = regnum(parts[1]); rs = regnum(parts[2])
-            instr_word = emit_inst_word(0x2, rd, rs, 0)
+            rd = regnum(parts[1])
+            rs = regnum(parts[2])
+            instr_word = emit_inst_word(0x2, rd, rs)
         elif op == "LI":
-            rd = regnum(parts[1]); imm = parse_imm(parts[2]) & 0xFFFF
+            rd = regnum(parts[1])
+            imm = parse_imm(parts[2]) & 0xFFFF
             instr_word = emit_inst_word(0x3, rd, 0, imm)
         elif op == "LD":
-            rd = regnum(parts[1]); addr = parse_imm(parts[2]) & 0xFF
-            instr_word = emit_inst_word(0x4, rd, 0, addr & 0xFFFF)
+            rd = regnum(parts[1])
+            addr = parse_imm(parts[2]) & 0xFF
+            instr_word = emit_inst_word(0x4, rd, 0, addr)
         elif op == "ST":
-            rd = regnum(parts[1]); addr = parse_imm(parts[2]) & 0xFF
-            instr_word = emit_inst_word(0x5, rd, 0, addr & 0xFFFF)
+            rd = regnum(parts[1])
+            addr = parse_imm(parts[2]) & 0xFF
+            instr_word = emit_inst_word(0x5, rd, 0, addr)
         elif op == "JZ":
-            rd = regnum(parts[1]); disp = parse_imm(parts[2]) & 0xFF
-            instr_word = emit_inst_word(0x6, rd, 0, disp & 0xFFFF)
+            rd = regnum(parts[1])
+            disp = parse_imm(parts[2]) & 0xFF
+            instr_word = emit_inst_word(0x6, rd, 0, disp)
         elif op == "JMP":
             target = parts[1]
             if target in labels:
                 addr = labels[target] & 0xFF
             else:
                 addr = parse_imm(target) & 0xFF
-            instr_word = emit_inst_word(0x7, 0, 0, addr & 0xFFFF)
+            instr_word = emit_inst_word(0x7, 0, 0, addr)
         else:
             raise ValueError(f"Unknown op/line: {s}")
         outwords.append(instr_word)
@@ -161,12 +137,12 @@ def second_pass(expanded, labels):
 def write_rom(outwords, outname, pad=None):
     with open(outname, "w") as f:
         for w in outwords:
-            f.write(f"{w:08x}\n")
+            f.write(f"{w:016x}\n")  # 64-bit hex word
         if pad:
             missing = pad - len(outwords)
             if missing > 0:
                 for _ in range(missing):
-                    f.write("00000000\n")
+                    f.write("0000000000000000\n")
     print(f"Wrote {len(outwords)} words to {outname}" + (f" (padded to {pad})" if pad else ""))
 
 def main():
