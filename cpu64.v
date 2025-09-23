@@ -12,7 +12,7 @@ module cpu (
     assign dbg_pc = pc;
 
     // ROM instrukcji: 64-bitowe słowa
-    rom64 #(.WIDTH(64), .DEPTH(256), .INIT_FILE("rom_init.hex")) imem (
+    rom64 #(.WIDTH(64), .DEPTH(256), .INIT_FILE("main.hex")) imem (
         .clk(clk),
         .addr(pc[7:0]), // zakładamy 256 słów ROM, więc bierzemy dolne 8 bitów
         .q(instr)

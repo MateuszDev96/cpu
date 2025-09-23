@@ -148,7 +148,7 @@ def write_rom(outwords, outname, pad=None):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("source", help="assembly source file")
-    ap.add_argument("--out", default="rom_init.hex", help="output rom file")
+    ap.add_argument("--out", default="main.hex", help="output rom file")
     ap.add_argument("--pad", type=int, default=0, help="pad output to this number of words (optional)")
     args = ap.parse_args()
 
