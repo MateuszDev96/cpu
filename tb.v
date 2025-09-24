@@ -18,7 +18,7 @@ module tb;
 
     initial begin
         #12 rst = 0;
-        #2000 $finish;
+        #3000000 $finish;  // symulacja potrwa 3 sekundy
     end
 
     reg prev = 0;
