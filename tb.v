@@ -25,6 +25,7 @@ module tb;
     always @(posedge clk) begin
         if (!prev && io_write) begin
             $display("%0d", io_data); // wypisuje 64-bitową wartość jako dziesiętną
+            // $write("%0d", io_data); // wypisuje 64-bitową wartość jako dziesiętną
         end
         prev <= io_write;
     end
