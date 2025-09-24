@@ -39,12 +39,15 @@ def first_pass(lines):
         s = code.strip()
         if not s:
             continue
-        if re.match(r'^[A-Za-z_]\w*:$', s):
+        # Etykieta - dopuszczamy też etykiety zaczynające się od kropki, np ".loop:"
+        if re.match(r'^\.?[A-Za-z_]\w*:$', s):
             lab = s[:-1]
             if lab in labels:
                 raise ValueError(f"Duplicate label {lab}")
             labels[lab] = pc
-            continue
+            # print(f"Label found: {lab} at PC={pc}")  # debug
+            continue  # nie dodajemy etykiety jako instrukcji
+        # Dyrektywy string i asciz
         m = re.match(r'^\.(string|asciz)\s+"(.*)"\s*$', s)
         if m:
             kind = m.group(1)
@@ -57,22 +60,25 @@ def first_pass(lines):
                 expanded.append(("BYTE", "\x00"))
                 pc += 2
             continue
+        # Dyrektywa halt
         if s.lower() == ".halt":
             expanded.append(("HALT", None))
             pc += 1
             continue
+        # Inne instrukcje
         expanded.append(("INST", s))
+        # print(f"Instruction added: {s} at PC={pc}")  # debug
         pc += 1
     return expanded, labels
 
 def emit_inst_word(opcode, rd=0, rs=0, imm16=0):
     """
-    Encode 64-bit instruction word:
+    Kodowanie 64-bitowego słowa instrukcji:
     [63:60] opcode
     [59:57] rd
     [56:54] rs
-    [53:48] reserved
-    [47:0]  imm16 (zero-extended)
+    [53:48] zarezerwowane (0)
+    [47:0]  imm16 (zero-rozszerzone)
     """
     word = ((opcode & 0xF) << 60) | ((rd & 0x7) << 57) | ((rs & 0x7) << 54) | (imm16 & 0xFFFF)
     return word & 0xFFFFFFFFFFFFFFFF
@@ -81,17 +87,20 @@ def second_pass(expanded, labels):
     outwords = []
     pc = 0
     for kind, payload in expanded:
+        # print(f"Second pass line kind={kind} payload={payload} at PC={pc}")  # debug
         if kind == "BYTE":
             val = ord(payload)
-            outwords.append(emit_inst_word(0x3, rd=0, rs=0, imm16=val))       # LI r0, ch
-            outwords.append(emit_inst_word(0x5, rd=0, rs=0, imm16=0x00FF))    # ST r0, 0xFF
+            # Ładuj znak do r0 i wypisz przez IO (adres 0xFF)
+            outwords.append(emit_inst_word(0x3, rd=0, imm16=val))       # LI r0, val
+            outwords.append(emit_inst_word(0x5, rd=0, imm16=0x00FF))    # ST r0, 0xFF (IO)
             pc += 2
             continue
         if kind == "HALT":
-            addr = pc & 0xFF
-            outwords.append(emit_inst_word(0x7, 0, 0, addr))
+            # Tu możesz dostosować, ale na razie robimy JMP do siebie (lub HALT)
+            outwords.append(emit_inst_word(0xF))
             pc += 1
             continue
+        # kind == INST
         s = payload.strip()
         parts = re.split(r'[,\s]+', s)
         op = parts[0].upper()
@@ -119,7 +128,11 @@ def second_pass(expanded, labels):
             instr_word = emit_inst_word(0x5, rd, 0, addr)
         elif op == "JZ":
             rd = regnum(parts[1])
-            disp = parse_imm(parts[2]) & 0xFF
+            disp_str = parts[2]
+            if disp_str in labels:
+                disp = labels[disp_str] & 0xFF
+            else:
+                disp = parse_imm(disp_str) & 0xFF
             instr_word = emit_inst_word(0x6, rd, 0, disp)
         elif op == "JMP":
             target = parts[1]
@@ -128,6 +141,12 @@ def second_pass(expanded, labels):
             else:
                 addr = parse_imm(target) & 0xFF
             instr_word = emit_inst_word(0x7, 0, 0, addr)
+        elif op == "SHL":
+            rd = regnum(parts[1])
+            rs = regnum(parts[2])
+            instr_word = emit_inst_word(0x9, rd, rs)
+        elif op == "HALT":
+            instr_word = emit_inst_word(0xF)
         else:
             raise ValueError(f"Unknown op/line: {s}")
         outwords.append(instr_word)
@@ -137,7 +156,7 @@ def second_pass(expanded, labels):
 def write_rom(outwords, outname, pad=None):
     with open(outname, "w") as f:
         for w in outwords:
-            f.write(f"{w:016x}\n")  # 64-bit hex word
+            f.write(f"{w:016x}\n")  # 64-bit hex słowo
         if pad:
             missing = pad - len(outwords)
             if missing > 0:
@@ -147,9 +166,9 @@ def write_rom(outwords, outname, pad=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("source", help="assembly source file")
-    ap.add_argument("--out", default="main.hex", help="output rom file")
-    ap.add_argument("--pad", type=int, default=0, help="pad output to this number of words (optional)")
+    ap.add_argument("source", help="plik z kodem asemblera")
+    ap.add_argument("--out", default="main.hex", help="plik wyjściowy ROM")
+    ap.add_argument("--pad", type=int, default=0, help="wyśrodkuj do podanej liczby słów")
     args = ap.parse_args()
 
     lines = read_source(args.source)
