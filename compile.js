@@ -150,14 +150,17 @@ function secondPass(expanded, labels) {
     let   instr = null
 
     // helper: two-operand R/I-type
-    function twoOp(opcode) {
+    function twoOperand(opcode) {
       const rd  = regnum(parts[1])
       const op2 = parts[2]
+
       if (/^[rR]?[0-7]$/.test(op2)) {
         const rs = regnum(op2)
+
         return emitInstWord(opcode, rd, rs, 0n)
       } else {
         const imm = parseImm(op2) & 0xFFFFn
+        
         return emitInstWord(opcode, rd, 7, imm)
       }
     }
@@ -168,11 +171,11 @@ function secondPass(expanded, labels) {
         break
 
       case 'ADD':
-        instr = twoOp(0x1)
+        instr = twoOperand(0x1)
         break
 
       case 'SUB':
-        instr = twoOp(0x2)
+        instr = twoOperand(0x2)
         break
 
       case 'SUBI': {
@@ -183,7 +186,7 @@ function secondPass(expanded, labels) {
       break
 
       case 'ADD':
-        instr = twoOp(0x1)
+        instr = twoOperand(0x1)
         break
 
       case 'ADDI': {
@@ -194,23 +197,23 @@ function secondPass(expanded, labels) {
       break
 
       case 'OR':
-        instr = twoOp(0xD)
+        instr = twoOperand(0xD)
         break
 
       case 'XOR':
-        instr = twoOp(0xE)
+        instr = twoOperand(0xE)
         break
 
       case 'SHL':
-        instr = twoOp(0x9)
+        instr = twoOperand(0x9)
         break
 
       case 'SHR':
-        instr = twoOp(0xA)
+        instr = twoOperand(0xA)
         break
 
       case 'SAR':
-        instr = twoOp(0xB)
+        instr = twoOperand(0xB)
         break
 
       case 'WRITE':

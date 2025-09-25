@@ -3,6 +3,7 @@ WRITE r1, 1          ; ustaw r1 = 1
 SUBI r0, 1
 SUBI r0, 1
 SUBI r0, 1
+ADDI r0, 12
 .loop:
 LOG  r0, 0xFF     ; wypisz r0
 SUB r0, r1       ; zmniejsz r0 o 1
