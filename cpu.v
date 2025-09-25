@@ -12,26 +12,26 @@ module cpu (
     assign dbg_pc = pc;
 
     // ROM instrukcji
-    wire [63:0] instr;
+    wire [63:0] instruction;
     rom64 #(.WIDTH(64), .DEPTH(256), .INIT_FILE("main.hex")) imem (
         .clk(clk),
         .addr(pc[7:0]),
-        .q(instr)
+        .q(instruction)
     );
 
     // Rejestry
     reg [63:0] rf [0:7];
-    wire [2:0] rd = instr[59:57];
-    wire [2:0] rs = instr[56:54];
+    wire [2:0] rd = instruction[59:57];
+    wire [2:0] rs = instruction[56:54];
 
     // RAM
     reg [63:0] dmem [0:255];
 
     // Dekodowanie
-    wire [3:0]  op     = instr[63:60];
-    wire [15:0] imm16  = instr[15:0];
-    wire [63:0] imm64  = instr[63:0];
-    wire [7:0]  addr8  = instr[7:0];
+    wire [3:0]  op     = instruction[63:60];
+    wire [15:0] imm16  = instruction[15:0];
+    wire [63:0] imm64  = instruction[63:0];
+    wire [7:0]  addr8  = instruction[7:0];
 
     reg [2:0] cycle_count;
     reg halted;
