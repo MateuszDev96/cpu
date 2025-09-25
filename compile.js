@@ -1,8 +1,12 @@
 #!/usr/bin/env node
+/**
+ * assemble64.js – dwuprzebiegowy assembler dla 64-bitowego micro-RISC
+ */
+
 const fs   = require('fs')
 const path = require('path')
 
-// Parse command-line arguments
+// parse command-line arguments
 const argv = process.argv.slice(2)
 if (argv.length < 1) {
   console.error(`Usage: ${path.basename(process.argv[1])} <source.s> [--out main.hex] [--pad N]`)
@@ -11,7 +15,7 @@ if (argv.length < 1) {
 
 let srcFile = argv[0]
 let outFile = 'main.hex'
-let pad      = 0
+let pad     = 0
 
 for (let i = 1; i < argv.length; i++) {
   if (argv[i] === '--out' && i + 1 < argv.length) {
@@ -22,14 +26,16 @@ for (let i = 1; i < argv.length; i++) {
   }
 }
 
-// Utility: parse register name r0..r7
+// utilities
+
+// r0..r7 → 0–7
 function regnum(r) {
-  let m = /^([rR]?)([0-7])$/.exec(r)
+  const m = /^([rR]?)([0-7])$/.exec(r)
   if (!m) throw new Error(`Bad register: ${r}`)
   return Number(m[2])
 }
 
-// Utility: parse immediate literal
+// immediate: decimal | hex 0x… | binary …b
 function parseImm(s) {
   s = s.trim()
   if (/^0x/i.test(s))      return BigInt(s)
@@ -37,35 +43,35 @@ function parseImm(s) {
   return BigInt(s)
 }
 
-// Utility: unescape things like "\n", "\u1234"
+// unescape "\n", "\u1234" via JSON
 function unescapeString(str) {
-  // JSON.parse on a quoted string will unescape escapes
   return JSON.parse(`"${str.replace(/"/g, '\\"')}"`)
 }
 
-// Read and strip comments
+// read source, strip comments after '#' or ';'
 function readSource(fname) {
-  let lines = fs.readFileSync(fname, 'utf8').split(/\r?\n/)
-  return lines.map(ln => {
-    let orig = ln.replace(/\r?\n$/, '')
-    let code = ln.split(/[#;]/, 1)[0]
-    return [orig, code]
-  })
+  return fs.readFileSync(fname, 'utf8')
+    .split(/\r?\n/)
+    .map(ln => {
+      const orig = ln.replace(/\r?\n$/, '')
+      const code = ln.split(/[#;]/, 1)[0]
+      return [orig, code]
+    })
 }
 
-// First pass: collect labels, expand .string/.asciz/.halt
+// first pass: labels + expand .string/.asciz/.halt
 function firstPass(lines) {
-  let labels   = {}
-  let expanded = []
-  let pc        = 0
+  const labels   = {}
+  const expanded = []
+  let   pc       = 0
 
-  for (let [orig, code] of lines) {
-    let s = code.trim()
+  for (const [orig, code] of lines) {
+    const s = code.trim()
     if (!s) continue
 
-    // Label?
+    // label definition
     if (/^\.?[A-Za-z_]\w*:$/.test(s)) {
-      let lab = s.slice(0, -1)
+      const lab = s.slice(0, -1)
       if (labels.hasOwnProperty(lab)) {
         throw new Error(`Duplicate label ${lab}`)
       }
@@ -73,13 +79,13 @@ function firstPass(lines) {
       continue
     }
 
-    // .string / .asciz
-    let m = /^\.(string|asciz)\s+"(.*)"\s*$/.exec(s)
+    // .string / .asciz directives
+    const m = /^\.(string|asciz)\s+"(.*)"\s*$/.exec(s)
     if (m) {
-      let kind = m[1]
-      let raw  = m[2]
-      let txt  = unescapeString(raw)
-      for (let ch of txt) {
+      const kind = m[1]
+      const raw  = m[2]
+      const txt  = unescapeString(raw)
+      for (const ch of txt) {
         expanded.push(['BYTE', ch])
         pc += 2
       }
@@ -90,14 +96,14 @@ function firstPass(lines) {
       continue
     }
 
-    // .halt
+    // .halt directive
     if (s.toLowerCase() === '.halt') {
       expanded.push(['HALT', null])
       pc += 1
       continue
     }
 
-    // Ordinary instruction
+    // ordinary instruction
     expanded.push(['INST', s])
     pc += 1
   }
@@ -105,32 +111,33 @@ function firstPass(lines) {
   return { expanded, labels }
 }
 
-// Emit 64-bit instruction word as BigInt
+// emit 64-bit instruction word
 const MASK64 = (1n << 64n) - 1n
 function emitInstWord(opcode, rd = 0, rs = 0, imm16 = 0n) {
-  let w =  (BigInt(opcode & 0xF) << 60n)
-         | (BigInt(rd & 0x7)       << 57n)
-         | (BigInt(rs & 0x7)       << 54n)
-         | (imm16 & 0xFFFFn)
+  const w =
+      (BigInt(opcode & 0xF) << 60n) |
+      (BigInt(rd      & 0x7) << 57n) |
+      (BigInt(rs      & 0x7) << 54n) |
+      (imm16 & 0xFFFFn)
   return w & MASK64
 }
 
-// Second pass: assemble instructions into words
+// second pass: assemble
 function secondPass(expanded, labels) {
-  let outwords = []
-  let pc       = 0
+  const outwords = []
+  let   pc       = 0
 
-  for (let [kind, payload] of expanded) {
+  for (const [kind, payload] of expanded) {
+    // BYTE → LI r0,val + ST r0,0xFF
     if (kind === 'BYTE') {
-      let val = BigInt(payload.charCodeAt(0))
-      // LI r0, val
-      outwords.push(emitInstWord(0x3, 0, 0, val))
-      // ST r0, 0xFF
-      outwords.push(emitInstWord(0x5, 0, 0, 0xFFn))
+      const val = BigInt(payload.charCodeAt(0))
+      outwords.push(emitInstWord(0x3, 0, 7, val & 0xFFFFn)) // LI r0,val
+      outwords.push(emitInstWord(0x5, 0, 7, 0xFFn))         // ST r0,0xFF
       pc += 2
       continue
     }
 
+    // HALT
     if (kind === 'HALT') {
       outwords.push(emitInstWord(0xF))
       pc += 1
@@ -138,67 +145,123 @@ function secondPass(expanded, labels) {
     }
 
     // INST
-    let parts = payload.trim().split(/[\s,]+/)
-    let op    = parts[0].toUpperCase()
-    let instr
+    const parts = payload.trim().split(/[\s,]+/)
+    const op    = parts[0].toUpperCase()
+    let   instr = null
+
+    // helper: two-operand R/I-type
+    function twoOp(opcode) {
+      const rd  = regnum(parts[1])
+      const op2 = parts[2]
+      if (/^[rR]?[0-7]$/.test(op2)) {
+        const rs = regnum(op2)
+        return emitInstWord(opcode, rd, rs, 0n)
+      } else {
+        const imm = parseImm(op2) & 0xFFFFn
+        return emitInstWord(opcode, rd, 7, imm)
+      }
+    }
 
     switch (op) {
       case 'NOP':
         instr = emitInstWord(0x0)
         break
-      case 'ADD': {
-        let rd = regnum(parts[1]), rs = regnum(parts[2])
-        instr = emitInstWord(0x1, rd, rs)
+
+      case 'ADD':
+        instr = twoOp(0x1)
         break
-      }
-      case 'SUB': {
-        let rd = regnum(parts[1]), rs = regnum(parts[2])
-        instr = emitInstWord(0x2, rd, rs)
+
+      case 'SUB':
+        instr = twoOp(0x2)
         break
+
+      case 'SUBI': {
+        const rd  = regnum(parts[1])
+        const imm = parseImm(parts[2]) & 0xFFFFn
+        instr = emitInstWord(0xD, rd, 7, imm)
       }
-      case 'LI': {
-        let rd  = regnum(parts[1])
-        let imm = parseImm(parts[2]) & 0xFFFFn
-        instr = emitInstWord(0x3, rd, 0, imm)
+      break
+
+      case 'ADD':
+        instr = twoOp(0x1)
         break
+
+      case 'ADDI': {
+        const rd  = regnum(parts[1])
+        const imm = parseImm(parts[2]) & 0xFFFFn
+        instr = emitInstWord(0xC, rd, 7, imm)
       }
-      case 'LD': {
-        let rd   = regnum(parts[1])
-        let addr = parseImm(parts[2]) & 0xFFn
-        instr = emitInstWord(0x4, rd, 0, addr)
+      break
+
+      case 'OR':
+        instr = twoOp(0xD)
         break
-      }
-      case 'ST': {
-        let rd   = regnum(parts[1])
-        let addr = parseImm(parts[2]) & 0xFFn
-        instr = emitInstWord(0x5, rd, 0, addr)
+
+      case 'XOR':
+        instr = twoOp(0xE)
         break
-      }
-      case 'JZ': {
-        let rd       = regnum(parts[1])
-        let dispStr  = parts[2]
-        let disp     = labels.hasOwnProperty(dispStr)
-                     ? BigInt(labels[dispStr] & 0xFF)
-                     : parseImm(dispStr) & 0xFFn
-        instr = emitInstWord(0x6, rd, 0, disp)
+
+      case 'SHL':
+        instr = twoOp(0x9)
         break
-      }
-      case 'JMP': {
-        let target = parts[1]
-        let addr   = labels.hasOwnProperty(target)
-                   ? BigInt(labels[target] & 0xFF)
-                   : parseImm(target) & 0xFFn
-        instr = emitInstWord(0x7, 0, 0, addr)
+
+      case 'SHR':
+        instr = twoOp(0xA)
         break
-      }
-      case 'SHL': {
-        let rd = regnum(parts[1]), rs = regnum(parts[2])
-        instr = emitInstWord(0x9, rd, rs)
+
+      case 'SAR':
+        instr = twoOp(0xB)
         break
-      }
+
+      case 'LI':
+        {
+          const rd  = regnum(parts[1])
+          const imm = parseImm(parts[2]) & 0xFFFFn
+          instr = emitInstWord(0x3, rd, 7, imm)
+        }
+        break
+
+      case 'LD':
+        {
+          const rd   = regnum(parts[1])
+          const addr = parseImm(parts[2]) & 0xFFn
+          instr = emitInstWord(0x4, rd, 0, addr)
+        }
+        break
+
+      case 'ST':
+        {
+          const rd   = regnum(parts[1])
+          const addr = parseImm(parts[2]) & 0xFFn
+          instr = emitInstWord(0x5, rd, 0, addr)
+        }
+        break
+
+      case 'JZ':
+        {
+          const rd      = regnum(parts[1])
+          const tgt     = parts[2]
+          const disp    = labels.hasOwnProperty(tgt)
+                        ? BigInt(labels[tgt] & 0xFF)
+                        : parseImm(tgt) & 0xFFn
+          instr = emitInstWord(0x6, rd, 0, disp)
+        }
+        break
+
+      case 'JMP':
+        {
+          const tgt  = parts[1]
+          const addr = labels.hasOwnProperty(tgt)
+                     ? BigInt(labels[tgt] & 0xFF)
+                     : parseImm(tgt) & 0xFFn
+          instr = emitInstWord(0x7, 0, 0, addr)
+        }
+        break
+
       case 'HALT':
         instr = emitInstWord(0xF)
         break
+
       default:
         throw new Error(`Unknown op: ${payload}`)
     }
@@ -210,9 +273,9 @@ function secondPass(expanded, labels) {
   return outwords
 }
 
-// Write ROM hex file
+// write ROM hex file
 function writeRom(words, filename, padTo) {
-  let lines = words.map(w =>
+  const lines = words.map(w =>
     w.toString(16).padStart(16, '0')
   )
   if (padTo && padTo > lines.length) {
@@ -225,10 +288,11 @@ function writeRom(words, filename, padTo) {
               (padTo ? ` (padded to ${padTo})` : ''))
 }
 
-// Main
+// main
 try {
-  let { expanded, labels } = firstPass(readSource(srcFile))
-  let outwords            = secondPass(expanded, labels)
+  const lines        = readSource(srcFile)
+  const { expanded, labels } = firstPass(lines)
+  const outwords     = secondPass(expanded, labels)
   writeRom(outwords, outFile, pad)
 } catch (err) {
   console.error('Error:', err.message)

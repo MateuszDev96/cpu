@@ -75,6 +75,8 @@ module cpu (
                     4'h9: rf[rd] <= rf[rd] << rf[rs];                  // SHL
                     4'hA: rf[rd] <= rf[rd] >> rf[rs];                  // SHR
                     4'hB: rf[rd] <= $signed(rf[rd]) >>> rf[rs];        // SAR
+                    4'hC: rf[rd] <= rf[rd] + {48'h0, imm16};           // ADDI
+                    4'hD: rf[rd] <= rf[rd] - {48'h0, imm16};           // SUBI
                     4'hF: halted <= 1;                                  // HALT
                     default: begin end
                 endcase
