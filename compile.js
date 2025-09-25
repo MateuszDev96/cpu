@@ -248,7 +248,7 @@ function secondPass(expanded, labels) {
         }
         break
 
-      case 'JMP':
+      case 'JUMP':
         {
           const tgt  = parts[1]
           const addr = labels.hasOwnProperty(tgt)

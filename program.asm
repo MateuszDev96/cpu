@@ -5,5 +5,5 @@ SUBI r0, 1
 LOG  r0, 0xFF     ; wypisz r0
 SUB r0, r1       ; zmniejsz r0 o 1
 JZ  r0, 2        ; jeśli r0 == 0, przeskocz 2 instrukcje (czyli do HALT)
-JMP .loop        ; skocz na początek pętli
+JUMP .loop        ; skocz na początek pętli
 HALT             ; zatrzymaj program

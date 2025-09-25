@@ -70,7 +70,7 @@ module cpu (
                         end
                     end
                     4'h6: if (rf[rd] == 0) pc <= pc + {{56{imm16[7]}}, imm16[7:0]}; // JZ
-                    4'h7: pc <= {56'h0, imm16[7:0]};                   // JMP
+                    4'h7: pc <= {56'h0, imm16[7:0]};                   // JUMP
                     4'h8: rf[rd] <= imm64;                              // LI64
                     4'h9: rf[rd] <= rf[rd] << rf[rs];                  // SHL
                     4'hA: rf[rd] <= rf[rd] >> rf[rs];                  // SHR
