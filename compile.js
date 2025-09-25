@@ -128,11 +128,11 @@ function secondPass(expanded, labels) {
   let   pc       = 0
 
   for (const [kind, payload] of expanded) {
-    // BYTE → LI r0,val + ST r0,0xFF
+    // BYTE → LOAD r0,val + LOG r0,0xFF
     if (kind === 'BYTE') {
       const val = BigInt(payload.charCodeAt(0))
-      outwords.push(emitInstWord(0x3, 0, 7, val & 0xFFFFn)) // LI r0,val
-      outwords.push(emitInstWord(0x5, 0, 7, 0xFFn))         // ST r0,0xFF
+      outwords.push(emitInstWord(0x3, 0, 7, val & 0xFFFFn)) // LOAD r0,val
+      outwords.push(emitInstWord(0x5, 0, 7, 0xFFn))         // LOG r0,0xFF
       pc += 2
       continue
     }
@@ -213,7 +213,7 @@ function secondPass(expanded, labels) {
         instr = twoOp(0xB)
         break
 
-      case 'LI':
+      case 'LOAD':
         {
           const rd  = regnum(parts[1])
           const imm = parseImm(parts[2]) & 0xFFFFn
@@ -229,7 +229,7 @@ function secondPass(expanded, labels) {
         }
         break
 
-      case 'ST':
+      case 'WRITE':
         {
           const rd   = regnum(parts[1])
           const addr = parseImm(parts[2]) & 0xFFn
