@@ -25,13 +25,13 @@ module cpu (
     wire [2:0] rs = instruction[56:54];
 
     // RAM
-    reg [63:0] dmem [0:255];
+    reg [63:0] ram [0:255];
 
     // Dekodowanie
     wire [3:0]  op     = instruction[63:60];
     wire [15:0] imm16  = instruction[15:0];
     wire [63:0] imm64  = instruction[63:0];
-    wire [7:0]  addr8  = instruction[7:0];
+    wire [7:0]  ram_addr  = instruction[7:0];
 
     reg [2:0] cycle_count;
     reg halted;
@@ -43,7 +43,7 @@ module cpu (
             cycle_count <= 0;
             halted <= 0;
             for (i = 0; i < 8; i = i + 1) rf[i] <= 64'h0;
-            for (i = 0; i < 256; i = i + 1) dmem[i] <= 64'h0;
+            for (i = 0; i < 256; i = i + 1) ram[i] <= 64'h0;
             io_write <= 0;
             io_data  <= 0;
         end else if (!halted) begin
@@ -59,10 +59,10 @@ module cpu (
                     4'h1: rf[rd] <= rf[rd] + rf[rs];                      // ADD
                     4'h2: rf[rd] <= rf[rd] - rf[rs];                      // SUB
                     4'h3: rf[rd] <= {48'h0, imm16};                       // WRITE
-                    4'h4: rf[rd] <= dmem[addr8];                          // LD
+                    4'h4: rf[rd] <= ram[ram_addr];                          // LD
                     4'h5: begin                                          // LOG
-                        dmem[addr8] <= rf[rd];
-                        if (addr8 == 8'hFF) begin
+                        ram[ram_addr] <= rf[rd];
+                        if (ram_addr == 8'hFF) begin
                             io_write <= 1;
                             io_data  <= rf[rd];
                         end
