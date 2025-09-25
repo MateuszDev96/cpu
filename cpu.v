@@ -60,9 +60,9 @@ module cpu (
                     4'h0: begin end // NOP
                     4'h1: rf[rd] <= rf[rd] + rf[rs];                      // ADD
                     4'h2: rf[rd] <= rf[rd] - rf[rs];                      // SUB
-                    4'h3: rf[rd] <= {48'h0, imm16};                       // LI
+                    4'h3: rf[rd] <= {48'h0, imm16};                       // WRITE
                     4'h4: rf[rd] <= dmem[addr8];                          // LD
-                    4'h5: begin                                          // ST
+                    4'h5: begin                                          // LOG
                         dmem[addr8] <= rf[rd];
                         if (addr8 == 8'hFF) begin
                             io_write <= 1;

@@ -229,7 +229,7 @@ function secondPass(expanded, labels) {
         }
         break
 
-      case 'WRITE':
+      case 'LOG':
         {
           const rd   = regnum(parts[1])
           const addr = parseImm(parts[2]) & 0xFFn
