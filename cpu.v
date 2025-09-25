@@ -33,8 +33,6 @@ module cpu (
     wire [63:0] imm64  = instr[63:0];
     wire [7:0]  addr8  = instr[7:0];
 
-    reg [63:0] alu;
-
     reg [2:0] cycle_count;
     reg halted;
 
