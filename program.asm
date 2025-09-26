@@ -1,12 +1,15 @@
-WRITEI r0, 15         ; r0 = licznik
-WRITEI r1, 1          ; ustaw r1 = 1
-SUBI r0, 1
-SUBI r0, 1
-SUBI r0, 1
-ADDI r0, 12
+SETI r0, 15
+SETI r1, 1
+SUBI r0, r0, 1
+SUBI r0, r0, 1
+SUBI r0, r0, 1
+ADDI r0, r0, 12
+
 .loop:
-LOG  r0, 0xFF     ; wypisz r0
-SUB r0, r1       ; zmniejsz r0 o 1
-JZ  r0, 2        ; jeśli r0 == 0, przeskocz 2 instrukcje (czyli do HALT)
-JUMP .loop        ; skocz na początek pętli
-HALT             ; zatrzymaj program
+LOG  r0, 0xFF
+SUB  r0, r0, r1
+JUMP_IF0   r0, .halt
+JUMP .loop
+
+.halt:
+HALT

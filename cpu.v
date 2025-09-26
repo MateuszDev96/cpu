@@ -21,18 +21,19 @@ module cpu (
 
     // Rejestry
     reg [63:0] registers [7:0];
-    // tutaj dodaj mi operand który będzie obsługiwać destination np "registers[operand1] <="
-    wire [2:0] operand1 = instruction[59:57];
-    wire [2:0] operand2 = instruction[56:54];
+    // destination = rejestr docelowy
+    wire [2:0] destination = instruction[59:57];
+    wire [2:0] operand1    = instruction[56:54];
+    wire [2:0] operand2    = instruction[53:51];
 
     // RAM
     reg [63:0] ram [0:255];
 
     // Dekodowanie
-    wire [3:0]  op     = instruction[63:60];
-    wire [15:0] imm16  = instruction[15:0];
-    wire [63:0] imm64  = instruction[63:0];
-    wire [7:0]  ram_addr  = instruction[7:0];
+    wire [3:0]  op       = instruction[63:60];
+    wire [15:0] imm16    = instruction[15:0];
+    wire [63:0] imm64    = instruction[63:0];
+    wire [7:0]  ram_addr = instruction[7:0];
 
     reg [2:0] cycle_count;
     reg halted;
@@ -57,26 +58,39 @@ module cpu (
 
                 case (op)
                     4'h0: begin end // NOP
-                    4'h1: registers[operand1] <= registers[operand1] + registers[operand2];                      // ADD
-                    4'h2: registers[operand1] <= registers[operand1] - registers[operand2];                      // SUB
-                    4'h3: registers[operand1] <= {48'h0, imm16};                       // WRITEI
-                    4'h4: registers[operand1] <= ram[ram_addr];                          // LD
-                    4'h5: begin                                          // LOG
+
+                    // Operacje arytmetyczne
+                    4'h1: registers[destination] <= registers[operand1] + registers[operand2]; // ADD
+                    4'h2: registers[destination] <= registers[operand1] - registers[operand2]; // SUB
+                    4'h9: registers[destination] <= registers[operand1] << registers[operand2]; // SHL
+                    4'hA: registers[destination] <= registers[operand1] >> registers[operand2]; // SHR
+                    4'hB: registers[destination] <= $signed(registers[operand1]) >>> registers[operand2]; // SAR
+
+                    // Natychmiastowe
+                    4'h3: registers[destination] <= {48'h0, imm16}; // SETI
+                    4'h8: registers[destination] <= imm64;          // LI64
+                    4'hC: registers[destination] <= registers[operand1] + {48'h0, imm16}; // ADDI
+                    4'hD: registers[destination] <= registers[operand1] - {48'h0, imm16}; // SUBI
+
+                    // Pamięć
+                    4'h4: registers[destination] <= ram[ram_addr]; // LD
+                    4'h5: begin // LOG / ST
                         ram[ram_addr] <= registers[operand1];
                         if (ram_addr == 8'hFF) begin
                             io_write <= 1;
                             io_data  <= registers[operand1];
                         end
                     end
-                    4'h6: if (registers[operand1] == 0) pc <= pc + {{56{imm16[7]}}, imm16[7:0]}; // JZ
-                    4'h7: pc <= {56'h0, imm16[7:0]};                   // JUMP
-                    4'h8: registers[operand1] <= imm64;                              // LI64
-                    4'h9: registers[operand1] <= registers[operand1] << registers[operand2];                  // SHL
-                    4'hA: registers[operand1] <= registers[operand1] >> registers[operand2];                  // SHR
-                    4'hB: registers[operand1] <= $signed(registers[operand1]) >>> registers[operand2];        // SAR
-                    4'hC: registers[operand1] <= registers[operand1] + {48'h0, imm16};           // ADDI
-                    4'hD: registers[operand1] <= registers[operand1] - {48'h0, imm16};           // SUBI
-                    4'hF: halted <= 1;                                  // HALT
+
+                    // Skoki
+                    // Zmienione: JUMP_IF0 skacze do absolutnego adresu z imm16[7:0]
+                    4'h6: if (registers[operand1] == 0)
+                              pc <= {56'h0, imm16[7:0]};            // JUMP_IF0 (absolute)
+                    4'h7: pc <= {56'h0, imm16[7:0]};                // JUMP (absolute)
+
+                    // Stop
+                    4'hF: halted <= 1; // HALT
+
                     default: begin end
                 endcase
             end else begin

@@ -1,7 +1,7 @@
-WRITEI r0, 5
-WRITEI r1, 7
-WRITEI r2, 4
-WRITEI r3, 55
+SETI r0, 5
+SETI r1, 7
+SETI r2, 4
+SETI r3, 55
 ADD r0, r1
 ADD r0, r2
 ADD r0, r3

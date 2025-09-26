@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 /**
  * assemble64.js – dwuprzebiegowy assembler dla 64-bitowego micro-RISC
+ * Format instrukcji:
+ * [63:60]  opcode
+ * [59:57]  destination (rd)
+ * [56:54]  operand1    (rs1)
+ * [53:51]  operand2    (rs2)
+ * [15:0]   imm16 (używane wg instrukcji)
  */
 
 const fs   = require('fs')
@@ -113,11 +119,12 @@ function firstPass(lines) {
 
 // emit 64-bit instruction word
 const MASK64 = (1n << 64n) - 1n
-function emitInstWord(opcode, rd = 0, rs = 0, imm16 = 0n) {
+function emitInstWord(opcode, rd = 0, rs1 = 0, rs2 = 0, imm16 = 0n) {
   const w =
       (BigInt(opcode & 0xF) << 60n) |
-      (BigInt(rd      & 0x7) << 57n) |
-      (BigInt(rs      & 0x7) << 54n) |
+      (BigInt(rd   & 0x7)   << 57n) |
+      (BigInt(rs1  & 0x7)   << 54n) |
+      (BigInt(rs2  & 0x7)   << 51n) |
       (imm16 & 0xFFFFn)
   return w & MASK64
 }
@@ -128,11 +135,11 @@ function secondPass(expanded, labels) {
   let   pc       = 0
 
   for (const [kind, payload] of expanded) {
-    // BYTE → WRITEI r0, val + LOG r0, 0xFF
+    // BYTE → SETI r0, val + LOG r0, 0xFF
     if (kind === 'BYTE') {
       const val = BigInt(payload.charCodeAt(0))
-      outwords.push(emitInstWord(0x3, 0, 7, val & 0xFFFFn)) // WRITEI r0, val
-      outwords.push(emitInstWord(0x5, 0, 7, 0xFFn))         // LOG r0, 0xFF
+      outwords.push(emitInstWord(0x3, 0, 0, 0, val & 0xFFFFn)) // SETI r0, imm
+      outwords.push(emitInstWord(0x5, 0, 0, 0, 0xFFn))         // LOG r0, 0xFF
       pc += 2
       continue
     }
@@ -149,117 +156,69 @@ function secondPass(expanded, labels) {
     const op    = parts[0].toUpperCase()
     let   instr = null
 
-    // helper: two-operand R/I-type
-    function twoOperand(opcode) {
-      const rd  = regnum(parts[1])
-      const op2 = parts[2]
-
-      if (/^[rR]?[0-7]$/.test(op2)) {
-        const rs = regnum(op2)
-
-        return emitInstWord(opcode, rd, rs, 0n)
-      } else {
-        const imm = parseImm(op2) & 0xFFFFn
-
-        return emitInstWord(opcode, rd, 7, imm)
-      }
-    }
-
     switch (op) {
       case 'NOP':
         instr = emitInstWord(0x0)
         break
 
+      // R-type: rd, rs1, rs2
       case 'ADD':
-        instr = twoOperand(0x1)
+        instr = emitInstWord(0x1, regnum(parts[1]), regnum(parts[2]), regnum(parts[3]))
         break
-
       case 'SUB':
-        instr = twoOperand(0x2)
+        instr = emitInstWord(0x2, regnum(parts[1]), regnum(parts[2]), regnum(parts[3]))
         break
-
-      case 'SUBI': {
-        const rd  = regnum(parts[1])
-        const imm = parseImm(parts[2]) & 0xFFFFn
-        instr = emitInstWord(0xD, rd, 7, imm)
-      }
-      break
-
-      case 'ADD':
-        instr = twoOperand(0x1)
-        break
-
-      case 'ADDI': {
-        const rd  = regnum(parts[1])
-        const imm = parseImm(parts[2]) & 0xFFFFn
-        instr = emitInstWord(0xC, rd, 7, imm)
-      }
-      break
-
-      case 'OR':
-        instr = twoOperand(0xD)
-        break
-
-      case 'XOR':
-        instr = twoOperand(0xE)
-        break
-
       case 'SHL':
-        instr = twoOperand(0x9)
+        instr = emitInstWord(0x9, regnum(parts[1]), regnum(parts[2]), regnum(parts[3]))
         break
-
       case 'SHR':
-        instr = twoOperand(0xA)
+        instr = emitInstWord(0xA, regnum(parts[1]), regnum(parts[2]), regnum(parts[3]))
         break
-
       case 'SAR':
-        instr = twoOperand(0xB)
+        instr = emitInstWord(0xB, regnum(parts[1]), regnum(parts[2]), regnum(parts[3]))
         break
 
-      case 'WRITEI':
-        {
-          const rd  = regnum(parts[1])
-          const imm = parseImm(parts[2]) & 0xFFFFn
-          instr = emitInstWord(0x3, rd, 7, imm)
-        }
+      // I-type: rd, rs1, imm
+      case 'ADDI':
+        instr = emitInstWord(0xC, regnum(parts[1]), regnum(parts[2]), 0, parseImm(parts[3]) & 0xFFFFn)
+        break
+      case 'SUBI':
+        instr = emitInstWord(0xD, regnum(parts[1]), regnum(parts[2]), 0, parseImm(parts[3]) & 0xFFFFn)
+        break
+      case 'SETI':
+        instr = emitInstWord(0x3, regnum(parts[1]), 0, 0, parseImm(parts[2]) & 0xFFFFn)
         break
 
+      // LD rd, addr
       case 'LD':
-        {
-          const rd   = regnum(parts[1])
-          const addr = parseImm(parts[2]) & 0xFFn
-          instr = emitInstWord(0x4, rd, 0, addr)
-        }
+        instr = emitInstWord(0x4, regnum(parts[1]), 0, 0, parseImm(parts[2]) & 0xFFn)
         break
 
+      // LOG rs1, addr
       case 'LOG':
-        {
-          const rd   = regnum(parts[1])
-          const addr = parseImm(parts[2]) & 0xFFn
-          instr = emitInstWord(0x5, rd, 0, addr)
-        }
+        instr = emitInstWord(0x5, 0, regnum(parts[1]), 0, parseImm(parts[2]) & 0xFFn)
         break
 
-      case 'JZ':
-        {
-          const rd      = regnum(parts[1])
-          const tgt     = parts[2]
-          const disp    = labels.hasOwnProperty(tgt)
-                        ? BigInt(labels[tgt] & 0xFF)
-                        : parseImm(tgt) & 0xFFn
-          instr = emitInstWord(0x6, rd, 0, disp)
-        }
+      // JUMP_IF0 rs1, target
+      case 'JUMP_IF0': {
+        const rs1  = regnum(parts[1])
+        const tgt  = parts[2]
+        const disp = labels.hasOwnProperty(tgt)
+                    ? BigInt(labels[tgt] & 0xFF)
+                    : parseImm(tgt) & 0xFFn
+        instr = emitInstWord(0x6, 0, rs1, 0, disp)
         break
+      }
 
-      case 'JUMP':
-        {
-          const tgt  = parts[1]
-          const addr = labels.hasOwnProperty(tgt)
-                     ? BigInt(labels[tgt] & 0xFF)
-                     : parseImm(tgt) & 0xFFn
-          instr = emitInstWord(0x7, 0, 0, addr)
-        }
+      // JUMP target (absolute low 8 bits)
+      case 'JUMP': {
+        const tgt  = parts[1]
+        const addr = labels.hasOwnProperty(tgt)
+                   ? BigInt(labels[tgt] & 0xFF)
+                   : parseImm(tgt) & 0xFFn
+        instr = emitInstWord(0x7, 0, 0, 0, addr)
         break
+      }
 
       case 'HALT':
         instr = emitInstWord(0xF)
