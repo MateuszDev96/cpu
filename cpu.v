@@ -21,7 +21,7 @@ module cpu (
 
     // Rejestry
     reg [63:0] registers [7:0];
-    // dodać destination / operand1 pełni dwie role / read / write
+    // tutaj dodaj mi operand który będzie obsługiwać destination np "registers[operand1] <="
     wire [2:0] operand1 = instruction[59:57];
     wire [2:0] operand2 = instruction[56:54];
 
