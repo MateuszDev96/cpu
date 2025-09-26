@@ -59,7 +59,7 @@ module cpu (
                     4'h0: begin end // NOP
                     4'h1: registers[operand1] <= registers[operand1] + registers[operand2];                      // ADD
                     4'h2: registers[operand1] <= registers[operand1] - registers[operand2];                      // SUB
-                    4'h3: registers[operand1] <= {48'h0, imm16};                       // WRITE
+                    4'h3: registers[operand1] <= {48'h0, imm16};                       // WRITEI
                     4'h4: registers[operand1] <= ram[ram_addr];                          // LD
                     4'h5: begin                                          // LOG
                         ram[ram_addr] <= registers[operand1];

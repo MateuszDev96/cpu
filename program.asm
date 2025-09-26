@@ -1,5 +1,5 @@
-WRITE r0, 15         ; r0 = licznik
-WRITE r1, 1          ; ustaw r1 = 1
+WRITEI r0, 15         ; r0 = licznik
+WRITEI r1, 1          ; ustaw r1 = 1
 SUBI r0, 1
 SUBI r0, 1
 SUBI r0, 1

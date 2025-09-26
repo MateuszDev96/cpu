@@ -1,9 +1,9 @@
-WRITE r0, 5
-WRITE r1, 7
-WRITE r2, 4
-WRITE r3, 55
+WRITEI r0, 5
+WRITEI r1, 7
+WRITEI r2, 4
+WRITEI r3, 55
 ADD r0, r1
 ADD r0, r2
 ADD r0, r3
-ST  r0, 0xFF
+LOG  r0, 0xFF
 .halt

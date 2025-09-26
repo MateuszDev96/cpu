@@ -128,11 +128,11 @@ function secondPass(expanded, labels) {
   let   pc       = 0
 
   for (const [kind, payload] of expanded) {
-    // BYTE → WRITE r0,val + LOG r0,0xFF
+    // BYTE → WRITEI r0, val + LOG r0, 0xFF
     if (kind === 'BYTE') {
       const val = BigInt(payload.charCodeAt(0))
-      outwords.push(emitInstWord(0x3, 0, 7, val & 0xFFFFn)) // WRITE r0,val
-      outwords.push(emitInstWord(0x5, 0, 7, 0xFFn))         // LOG r0,0xFF
+      outwords.push(emitInstWord(0x3, 0, 7, val & 0xFFFFn)) // WRITEI r0, val
+      outwords.push(emitInstWord(0x5, 0, 7, 0xFFn))         // LOG r0, 0xFF
       pc += 2
       continue
     }
@@ -160,7 +160,7 @@ function secondPass(expanded, labels) {
         return emitInstWord(opcode, rd, rs, 0n)
       } else {
         const imm = parseImm(op2) & 0xFFFFn
-        
+
         return emitInstWord(opcode, rd, 7, imm)
       }
     }
@@ -216,7 +216,7 @@ function secondPass(expanded, labels) {
         instr = twoOperand(0xB)
         break
 
-      case 'WRITE':
+      case 'WRITEI':
         {
           const rd  = regnum(parts[1])
           const imm = parseImm(parts[2]) & 0xFFFFn
