@@ -1,110 +1,109 @@
 `default_nettype none
 module cpu (
-    input  wire clk,
-    input  wire rst,
-    output wire [63:0] dbg_pc,
-    output reg  io_write,
-    output reg  [63:0] io_data
+  input  wire clk,
+  input  wire rst,
+  output wire [63:0] dbg_pc,
+  output reg  io_write,
+  output reg  [63:0] io_data
 );
-    parameter INSTR_PERIOD = 4;
+  parameter INSTR_PERIOD = 4;
 
-    reg [63:0] pc;
-    assign dbg_pc = pc;
+  reg [63:0] pc;
+  assign dbg_pc = pc;
 
-    // ROM instrukcji
-    wire [63:0] instruction;
-    rom64 #(.WIDTH(64), .DEPTH(256), .INIT_FILE("main.hex")) imem (
-        .clk(clk),
-        .addr(pc[7:0]),
-        .q(instruction)
-    );
+  // ROM instrukcji
+  wire [63:0] instruction;
+  rom64 #(.WIDTH(64), .DEPTH(256), .INIT_FILE("main.hex")) imem (
+    .clk(clk),
+    .addr(pc[7:0]),
+    .q(instruction)
+  );
 
-    // Rejestry
-    reg [63:0] registers [7:0];
-    // destination = rejestr docelowy
-    wire [2:0] destination = instruction[59:57];
-    wire [2:0] operand1    = instruction[56:54];
-    wire [2:0] operand2    = instruction[53:51];
+  // Rejestry
+  reg [63:0] registers [7:0];
+  wire [2:0] destination = instruction[59:57];
+  wire [2:0] operand1    = instruction[56:54];
+  wire [2:0] operand2    = instruction[53:51];
 
-    // RAM
-    reg [63:0] ram [0:255];
+  // RAM
+  reg [63:0] ram [0:255];
 
-    // Dekodowanie
-    wire [3:0]  op       = instruction[63:60];
-    wire [15:0] imm16    = instruction[15:0];
-    wire [63:0] imm64    = instruction[63:0];
-    wire [7:0]  ram_addr = instruction[7:0];
+  // Dekodowanie
+  wire [3:0]  op       = instruction[63:60];
+  wire [15:0] imm16    = instruction[15:0];
+  wire [63:0] imm64    = instruction[63:0];
+  wire [7:0]  ram_addr = instruction[7:0];
 
-    reg [2:0] cycle_count;
-    reg halted;
+  reg [2:0] cycle_count;
+  reg halted;
 
-    integer i;
-    always @(posedge clk) begin
-        if (rst) begin
-            pc <= 64'h0;
-            cycle_count <= 0;
-            halted <= 0;
-            for (i = 0; i < 8; i = i + 1) registers[i] <= 64'h0;
-            for (i = 0; i < 256; i = i + 1) ram[i] <= 64'h0;
-            io_write <= 0;
-            io_data  <= 0;
-        end else if (!halted) begin
-            io_write <= 0;
-            io_data  <= 0;
+  integer i;
+  always @(posedge clk) begin
+    if (rst) begin
+      pc <= 64'h0;
+      cycle_count <= 0;
+      halted <= 0;
+      for (i = 0; i < 8; i = i + 1) registers[i] <= 64'h0;
+      for (i = 0; i < 256; i = i + 1) ram[i] <= 64'h0;
+      io_write <= 0;
+      io_data  <= 0;
+    end else if (!halted) begin
+      io_write <= 0;
+      io_data  <= 0;
 
-            if (cycle_count == INSTR_PERIOD - 1) begin
-                cycle_count <= 0;
-                pc <= pc + 1;
+      if (cycle_count == INSTR_PERIOD - 1) begin
+        cycle_count <= 0;
+        pc <= pc + 1;
 
-                case (op)
-                    4'h0: begin end // NOP
+        case (op)
+          4'h0: begin end // NOP
 
-                    // Operacje arytmetyczne
-                    4'h1: registers[destination] <= registers[operand1] + registers[operand2]; // ADD
-                    4'h2: registers[destination] <= registers[operand1] - registers[operand2]; // SUB
-                    4'h9: registers[destination] <= registers[operand1] << registers[operand2]; // SHL
-                    4'hA: registers[destination] <= registers[operand1] >> registers[operand2]; // SHR
-                    4'hB: registers[destination] <= $signed(registers[operand1]) >>> registers[operand2]; // SAR
+          // Operacje arytmetyczne
+          4'h1: registers[destination] <= registers[operand1] + registers[operand2];             // ADD
+          4'h2: registers[destination] <= registers[operand1] - registers[operand2];             // SUB
+          4'h9: registers[destination] <= registers[operand1] << registers[operand2];            // SHL
+          4'hA: registers[destination] <= registers[operand1] >> registers[operand2];            // SHR
+          4'hB: registers[destination] <= $signed(registers[operand1]) >>> registers[operand2];  // SAR
 
-                    // Natychmiastowe
-                    4'h3: registers[destination] <= {48'h0, imm16}; // SETI
-                    4'h8: registers[destination] <= imm64;          // LI64
-                    4'hC: registers[destination] <= registers[operand1] + {48'h0, imm16}; // ADDI
-                    4'hD: registers[destination] <= registers[operand1] - {48'h0, imm16}; // SUBI
+          // Natychmiastowe
+          4'h3: registers[destination] <= {48'h0, imm16};                        // SETI
+          4'h8: registers[destination] <= imm64;                                 // LI64
+          4'hC: registers[destination] <= registers[operand1] + {48'h0, imm16};  // ADDI
+          4'hD: registers[destination] <= registers[operand1] - {48'h0, imm16};  // SUBI
 
-                    // Pamięć
-                    4'h4: registers[destination] <= ram[ram_addr]; // LD
-                    4'h5: begin // SEND
-                        ram[ram_addr] <= registers[operand1];
-                        if (ram_addr == 8'hFF) begin
-                            io_write <= 1;
-                            io_data  <= registers[operand1];
-                        end
-                    end
-                    // Skoki
-                    // Zmienione: JUMP_IF0 skacze do absolutnego adresu z imm16[7:0]
-                    4'h6: if (registers[operand1] == 0) pc <= {56'h0, imm16[7:0]};  // JUMP_IF0 (absolute)
-                    4'h7: pc <= {56'h0, imm16[7:0]};                                // JUMP (absolute)
-
-                    // Stop
-                    4'hF: halted <= 1; // HALT
-
-                    default: begin end
-                endcase
-            end else begin
-                cycle_count <= cycle_count + 1;
+          // Pamięć
+          4'h4: registers[destination] <= ram[ram_addr]; // LD
+          4'h5: begin // SEND
+            ram[ram_addr] <= registers[operand1];
+            if (ram_addr == 8'hFF) begin
+              io_write <= 1;
+              io_data  <= registers[operand1];
             end
-        end
+          end
+          // Skoki
+          // Zmienione: JUMP_IF0 skacze do absolutnego adresu z imm16[7:0]
+          4'h6: if (registers[operand1] == 0) pc <= {56'h0, imm16[7:0]};  // JUMP_IF0 (absolute)
+          4'h7: pc <= {56'h0, imm16[7:0]};                                // JUMP (absolute)
+
+          // Stop
+          4'hF: halted <= 1; // HALT
+
+          default: begin end
+        endcase
+      end else begin
+        cycle_count <= cycle_count + 1;
+      end
     end
+  end
 endmodule
 
 // ROM 64-bit
 module rom64 #(parameter WIDTH=64, DEPTH=256, INIT_FILE="") (
-    input wire clk,
-    input wire [7:0] addr,
-    output reg [WIDTH-1:0] q
+  input wire clk,
+  input wire [7:0] addr,
+  output reg [WIDTH-1:0] q
 );
-    reg [WIDTH-1:0] mem [0:DEPTH-1];
-    initial if (INIT_FILE != "") $readmemh(INIT_FILE, mem);
-    always @(posedge clk) q <= mem[addr];
+  reg [WIDTH-1:0] mem [0:DEPTH-1];
+  initial if (INIT_FILE != "") $readmemh(INIT_FILE, mem);
+  always @(posedge clk) q <= mem[addr];
 endmodule
