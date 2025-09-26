@@ -199,8 +199,8 @@ function secondPass(expanded, labels) {
         instr = emitInstWord(0x5, 0, regnum(parts[1]), 0, parseImm(parts[2]) & 0xFFn)
         break
 
-      // JUMP_IF0 rs1, target
-      case 'JUMP_IF0': {
+      // JUMPIF0 rs1, target
+      case 'JUMPIF0': {
         const rs1  = regnum(parts[1])
         const tgt  = parts[2]
         const disp = labels.hasOwnProperty(tgt)

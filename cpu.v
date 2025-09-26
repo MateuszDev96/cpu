@@ -81,8 +81,8 @@ module cpu (
             end
           end
           // Skoki
-          // Zmienione: JUMP_IF0 skacze do absolutnego adresu z imm16[7:0]
-          4'h6: if (registers[operand1] == 0) pc <= {56'h0, imm16[7:0]};  // JUMP_IF0 (absolute)
+          // Zmienione: JUMPIF0 skacze do absolutnego adresu z imm16[7:0]
+          4'h6: if (registers[operand1] == 0) pc <= {56'h0, imm16[7:0]};  // JUMPIF0 (absolute)
           4'h7: pc <= {56'h0, imm16[7:0]};                                // JUMP (absolute)
 
           // Stop
