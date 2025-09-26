@@ -74,19 +74,17 @@ module cpu (
 
                     // Pamięć
                     4'h4: registers[destination] <= ram[ram_addr]; // LD
-                    4'h5: begin // LOG / ST
+                    4'h5: begin // SEND
                         ram[ram_addr] <= registers[operand1];
                         if (ram_addr == 8'hFF) begin
                             io_write <= 1;
                             io_data  <= registers[operand1];
                         end
                     end
-
                     // Skoki
                     // Zmienione: JUMP_IF0 skacze do absolutnego adresu z imm16[7:0]
-                    4'h6: if (registers[operand1] == 0)
-                              pc <= {56'h0, imm16[7:0]};            // JUMP_IF0 (absolute)
-                    4'h7: pc <= {56'h0, imm16[7:0]};                // JUMP (absolute)
+                    4'h6: if (registers[operand1] == 0) pc <= {56'h0, imm16[7:0]};  // JUMP_IF0 (absolute)
+                    4'h7: pc <= {56'h0, imm16[7:0]};                                // JUMP (absolute)
 
                     // Stop
                     4'hF: halted <= 1; // HALT

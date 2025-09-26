@@ -5,5 +5,5 @@ SETI r3, 55
 ADD r0, r1
 ADD r0, r2
 ADD r0, r3
-LOG  r0, 0xFF
+SEND  r0, 0xFF
 .halt

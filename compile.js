@@ -135,11 +135,11 @@ function secondPass(expanded, labels) {
   let   pc       = 0
 
   for (const [kind, payload] of expanded) {
-    // BYTE → SETI r0, val + LOG r0, 0xFF
+    // BYTE → SETI r0, val + SEND r0, 0xFF
     if (kind === 'BYTE') {
       const val = BigInt(payload.charCodeAt(0))
       outwords.push(emitInstWord(0x3, 0, 0, 0, val & 0xFFFFn)) // SETI r0, imm
-      outwords.push(emitInstWord(0x5, 0, 0, 0, 0xFFn))         // LOG r0, 0xFF
+      outwords.push(emitInstWord(0x5, 0, 0, 0, 0xFFn))         // SEND r0, 0xFF
       pc += 2
       continue
     }
@@ -194,8 +194,8 @@ function secondPass(expanded, labels) {
         instr = emitInstWord(0x4, regnum(parts[1]), 0, 0, parseImm(parts[2]) & 0xFFn)
         break
 
-      // LOG rs1, addr
-      case 'LOG':
+      // SEND rs1, addr
+      case 'SEND':
         instr = emitInstWord(0x5, 0, regnum(parts[1]), 0, parseImm(parts[2]) & 0xFFn)
         break
 
