@@ -2,20 +2,20 @@
 module cpu (
   input  wire clk,
   input  wire rst,
-  output wire [63:0] dbg_pc,
+  output wire [63:0] dbg_instruction_counter,
   output reg  io_write,
   output reg  [63:0] io_data
 );
   parameter INSTR_PERIOD = 4;
 
-  reg [63:0] pc;
-  assign dbg_pc = pc;
+  reg [63:0] instruction_counter;
+  assign dbg_instruction_counter = instruction_counter;
 
   // ROM instrukcji
   wire [63:0] instruction;
   rom64 #(.WIDTH(64), .DEPTH(256), .INIT_FILE("main.hex")) imem (
     .clk(clk),
-    .addr(pc[7:0]),
+    .addr(instruction_counter[7:0]),
     .q(instruction)
   );
 
@@ -40,7 +40,7 @@ module cpu (
   integer i;
   always @(posedge clk) begin
     if (rst) begin
-      pc <= 64'h0;
+      instruction_counter <= 64'h0;
       cycle_count <= 0;
       halted <= 0;
       for (i = 0; i < 8; i = i + 1) registers[i] <= 64'h0;
@@ -53,7 +53,7 @@ module cpu (
 
       if (cycle_count == INSTR_PERIOD - 1) begin
         cycle_count <= 0;
-        pc <= pc + 1;
+        instruction_counter <= instruction_counter + 1;
 
         case (op)
           4'h0: begin end // NOP
@@ -82,8 +82,8 @@ module cpu (
           end
           // Skoki
           // Zmienione: JUMPIF0 skacze do absolutnego adresu z imm16[7:0]
-          4'h6: if (registers[operand1] == 0) pc <= {56'h0, imm16[7:0]};  // JUMPIF0 (absolute)
-          4'h7: pc <= {56'h0, imm16[7:0]};                                // JUMP (absolute)
+          4'h6: if (registers[operand1] == 0) instruction_counter <= {56'h0, imm16[7:0]};  // JUMPIF0 (absolute)
+          4'h7: instruction_counter <= {56'h0, imm16[7:0]};                                // JUMP (absolute)
 
           // Stop
           4'hF: halted <= 1; // HALT

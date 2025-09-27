@@ -2,14 +2,14 @@
 module tb;
     reg clk = 0;
     reg rst = 1;
-    wire [63:0] pc;
+    wire [63:0] instruction_counter;
     wire io_write;
     wire [63:0] io_data;
 
     cpu uut (
         .clk(clk),
         .rst(rst),
-        .dbg_pc(pc),
+        .dbg_instruction_counter(instruction_counter),
         .io_write(io_write),
         .io_data(io_data)
     );
